@@ -17,7 +17,16 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang xz-utils curl make git ldid
+          sudo apt-get install -y clang xz-utils curl make git
+
+      - name: Install ldid (Linux prebuilt)
+        run: |
+          # Ubuntu 仓库没有 ldid, 从 Procursus 下载 Linux 版
+          sudo mkdir -p /usr/local/bin
+          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64 || \
+          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_linux_x86_64
+          sudo chmod +x /usr/local/bin/ldid
+          ldid --version || ldid 2>&1 | head -1 || echo "ldid installed"
 
       - name: Set up Theos
         run: |
@@ -38,8 +47,7 @@ jobs:
       - name: Build with Theos (Linux)
         run: |
           export THEOS=/opt/theos
-          export PATH=$THEOS/bin:$PATH
-          # Linux 上编译 iOS 目标需要指定 clang 可用
+          export PATH=$THEOS/bin:/usr/local/bin:$PATH
           make clean || true
           make
           find .theos -name "*.dylib" -exec ls -lh {} \;
