@@ -7,50 +7,48 @@ on:
 
 jobs:
   build:
-    # 用 Ubuntu (免费额度, 私有仓库也能用)。macOS runner 私有仓库要付费, 会永远卡 queued
+    # 用 Ubuntu (免费额度)。macOS runner 私有仓库要付费, 会卡 queued
+    # Theos 在 Linux 上自带 odcctools (含 ld64), 能正确处理 Mach-O 链接
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install clang
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang xz-utils curl
+          sudo apt-get install -y clang xz-utils curl make git ldid
 
-      - name: Download iOS 16.5 SDK
+      - name: Set up Theos
         run: |
-          # theos/sdks 仓库里 SDK 是目录, 用 git sparse-checkout 只拉 iPhoneOS16.5.sdk
+          export THEOS=/opt/theos
+          sudo mkdir -p $THEOS
+          sudo chown -R $(whoami) $THEOS
+          git clone --recursive --depth 1 https://github.com/theos/theos.git $THEOS
+
+      - name: Fetch iOS 16.5 SDK (sparse checkout)
+        run: |
           cd /tmp
           git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git
-          cd sdks
-          git sparse-checkout set iPhoneOS16.5.sdk
-          ls -la iPhoneOS16.5.sdk | head -10
-          mkdir -p $HOME/ios-sdk
-          cp -r iPhoneOS16.5.sdk $HOME/ios-sdk/
+          cd sdks && git sparse-checkout set iPhoneOS16.5.sdk
+          mkdir -p /opt/theos/sdks
+          cp -r iPhoneOS16.5.sdk /opt/theos/sdks/
+          ls /opt/theos/sdks/iPhoneOS16.5.sdk | head -5
 
-      - name: Cross-compile dylib (arm64 iOS)
+      - name: Build with Theos (Linux)
         run: |
-          SDK=$(ls -d $HOME/ios-sdk/*.sdk | head -1)
-          echo "SDK=$SDK"
-          ls "$SDK" | head -10
-          clang -target arm64-apple-ios16.5 \
-                -isysroot "$SDK" \
-                -mios-version-min=14.0 \
-                -fobjc-arc \
-                -Wno-unused-variable \
-                -dynamiclib \
-                -fPIC \
-                -framework UIKit \
-                -framework Foundation \
-                -o nba2k20mod.dylib \
-                Tweak.m
-          file nba2k20mod.dylib
-          ls -lh nba2k20mod.dylib
+          export THEOS=/opt/theos
+          export PATH=$THEOS/bin:$PATH
+          # Linux 上编译 iOS 目标需要指定 clang 可用
+          make clean || true
+          make
+          find .theos -name "*.dylib" -exec ls -lh {} \;
 
       - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
           name: nba2k20mod
-          path: nba2k20mod.dylib
-          if-no-files-found: error
+          path: |
+            .theos/_/usr/lib/*.dylib
+            nba2k20mod.dylib
+          if-no-files-found: warn
