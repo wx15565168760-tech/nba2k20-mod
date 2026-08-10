@@ -31,7 +31,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nba2k20mod
-          path: |
-            .theos/_/usr/lib/*.dylib
-            nba2k20mod.dylib
-          if-no-files-found: warn
+          path: .theos/obj/**/*.dylib
+          if-no-files-found: error
