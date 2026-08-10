@@ -7,39 +7,22 @@ on:
 
 jobs:
   build:
-    # 公开仓库的 macOS runner 免费。Theos 在 macOS 上原生编译 iOS arm64,
-    # 不用装交叉编译器, 直接用 Xcode 自带 clang
-    runs-on: macos-13
+    # 用 Ubuntu runner。Theos 在 Linux 上需要 Swift 交叉工具链
+    # (kabiroberai/swift-toolchain-linux, 含 iPhoneOS clang+ld64), 解压到 $THEOS/toolchain
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ldid (macOS prebuilt)
-        run: |
-          sudo mkdir -p /usr/local/bin
-          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_darwin_x86_64 || \
-          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_darwin_arm64
-          sudo chmod +x /usr/local/bin/ldid
-          ldid -v 2>&1 | head -1 || echo "ldid installed"
-
-      - name: Set up Theos
-        run: |
-          export THEOS=$HOME/theos
-          git clone --recursive --depth 1 https://github.com/theos/theos.git $THEOS
-
-      - name: Fetch iOS 16.5 SDK (sparse checkout)
-        run: |
-          cd /tmp
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git
-          cd sdks && git sparse-checkout set iPhoneOS16.5.sdk
-          mkdir -p $HOME/theos/sdks
-          cp -r iPhoneOS16.5.sdk $HOME/theos/sdks/
-          ls $HOME/theos/sdks/iPhoneOS16.5.sdk | head -5
+      - name: Install Theos (Linux, with Swift toolchain)
+        uses: Randomblock1/theos-action@v1
+        with:
+          theos-dir: /opt/theos
 
       - name: Build with Theos
         run: |
-          export THEOS=$HOME/theos
-          export PATH=$THEOS/bin:/usr/local/bin:$PATH
+          export THEOS=/opt/theos
+          export PATH=$THEOS/bin:$PATH
           make clean || true
           make
           find .theos -name "*.dylib" -exec ls -lh {} \;
