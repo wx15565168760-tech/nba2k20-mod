@@ -7,39 +7,49 @@ on:
 
 jobs:
   build:
-    runs-on: macos-13
+    # 用 Ubuntu (免费额度, 私有仓库也能用)。macOS runner 私有仓库要付费, 会永远卡 queued
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Theos
+      - name: Install clang
         run: |
-          export THEOS=/opt/theos
-          sudo mkdir -p $THEOS
-          sudo chown -R $(whoami) $THEOS
-          # 拉取 Theos (精简历史)
-          git clone --recursive --depth 1 https://github.com/theos/theos.git $THEOS
-          # 下载 iOS SDK 16.x (clang 需要 SDK 才能编 arm64 iOS 目标)
-          mkdir -p $THEOS/sdks
+          sudo apt-get update
+          sudo apt-get install -y clang xz-utils curl
+
+      - name: Download iOS 16 SDK
+        run: |
           cd /tmp
           curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/download/iPhoneOS16.5/iPhoneOS16.5.sdk.tar.xz || \
           curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/download/iPhoneOS16.4/iPhoneOS16.4.sdk.tar.xz || \
           curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/download/iPhoneOS16.0/iPhoneOS16.0.sdk.tar.xz
           ls -lh /tmp/sdk.tar.xz
-          tar -xJf /tmp/sdk.tar.xz -C $THEOS/sdks
-          ls $THEOS/sdks
+          mkdir -p $HOME/ios-sdk
+          tar -xJf /tmp/sdk.tar.xz -C $HOME/ios-sdk
+          ls $HOME/ios-sdk
 
-      - name: Build dylib
+      - name: Cross-compile dylib (arm64 iOS)
         run: |
-          export THEOS=/opt/theos
-          export PATH=$THEOS/bin:$PATH
-          make clean || true
-          make
-          ls -lh .theos/_/usr/lib/*.dylib
+          SDK=$(ls -d $HOME/ios-sdk/*.sdk | head -1)
+          echo "SDK=$SDK"
+          clang -target arm64-apple-ios16.5 \
+                -isysroot "$SDK" \
+                -mios-version-min=14.0 \
+                -fobjc-arc \
+                -Wno-unused-variable \
+                -dynamiclib \
+                -fPIC \
+                -framework UIKit \
+                -framework Foundation \
+                -o nba2k20mod.dylib \
+                Tweak.m
+          file nba2k20mod.dylib
+          ls -lh nba2k20mod.dylib
 
       - name: Upload dylib
         uses: actions/upload-artifact@v4
         with:
           name: nba2k20mod
-          path: .theos/_/usr/lib/*.dylib
+          path: nba2k20mod.dylib
           if-no-files-found: error
