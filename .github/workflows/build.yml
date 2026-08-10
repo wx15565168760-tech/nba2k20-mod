@@ -7,32 +7,24 @@ on:
 
 jobs:
   build:
-    # 用 Ubuntu (免费额度)。macOS runner 私有仓库要付费, 会卡 queued
-    # Theos 在 Linux 上自带 odcctools (含 ld64), 能正确处理 Mach-O 链接
-    runs-on: ubuntu-22.04
+    # 公开仓库的 macOS runner 免费。Theos 在 macOS 上原生编译 iOS arm64,
+    # 不用装交叉编译器, 直接用 Xcode 自带 clang
+    runs-on: macos-13
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install deps
+      - name: Install ldid (macOS prebuilt)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang xz-utils curl make git
-
-      - name: Install ldid (Linux prebuilt)
-        run: |
-          # Ubuntu 仓库没有 ldid, 从 Procursus 下载 Linux 版
           sudo mkdir -p /usr/local/bin
-          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/download/v2.1.5-procursus7/ldid_linux_x86_64 || \
-          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_linux_x86_64
+          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_darwin_x86_64 || \
+          sudo curl -L -o /usr/local/bin/ldid https://github.com/ProcursusTeam/ldid/releases/latest/download/ldid_darwin_arm64
           sudo chmod +x /usr/local/bin/ldid
-          ldid --version || ldid 2>&1 | head -1 || echo "ldid installed"
+          ldid -v 2>&1 | head -1 || echo "ldid installed"
 
       - name: Set up Theos
         run: |
-          export THEOS=/opt/theos
-          sudo mkdir -p $THEOS
-          sudo chown -R $(whoami) $THEOS
+          export THEOS=$HOME/theos
           git clone --recursive --depth 1 https://github.com/theos/theos.git $THEOS
 
       - name: Fetch iOS 16.5 SDK (sparse checkout)
@@ -40,13 +32,13 @@ jobs:
           cd /tmp
           git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git
           cd sdks && git sparse-checkout set iPhoneOS16.5.sdk
-          mkdir -p /opt/theos/sdks
-          cp -r iPhoneOS16.5.sdk /opt/theos/sdks/
-          ls /opt/theos/sdks/iPhoneOS16.5.sdk | head -5
+          mkdir -p $HOME/theos/sdks
+          cp -r iPhoneOS16.5.sdk $HOME/theos/sdks/
+          ls $HOME/theos/sdks/iPhoneOS16.5.sdk | head -5
 
-      - name: Build with Theos (Linux)
+      - name: Build with Theos
         run: |
-          export THEOS=/opt/theos
+          export THEOS=$HOME/theos
           export PATH=$THEOS/bin:/usr/local/bin:$PATH
           make clean || true
           make
