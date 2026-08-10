@@ -18,21 +18,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang xz-utils curl
 
-      - name: Download iOS 16 SDK
+      - name: Download iOS 16.5 SDK
         run: |
+          # theos/sdks 仓库里 SDK 是目录, 用 git sparse-checkout 只拉 iPhoneOS16.5.sdk
           cd /tmp
-          curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/download/iPhoneOS16.5/iPhoneOS16.5.sdk.tar.xz || \
-          curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/download/iPhoneOS16.4/iPhoneOS16.4.sdk.tar.xz || \
-          curl -L -o sdk.tar.xz https://github.com/theos/sdks/releases/download/iPhoneOS16.0/iPhoneOS16.0.sdk.tar.xz
-          ls -lh /tmp/sdk.tar.xz
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/theos/sdks.git
+          cd sdks
+          git sparse-checkout set iPhoneOS16.5.sdk
+          ls -la iPhoneOS16.5.sdk | head -10
           mkdir -p $HOME/ios-sdk
-          tar -xJf /tmp/sdk.tar.xz -C $HOME/ios-sdk
-          ls $HOME/ios-sdk
+          cp -r iPhoneOS16.5.sdk $HOME/ios-sdk/
 
       - name: Cross-compile dylib (arm64 iOS)
         run: |
           SDK=$(ls -d $HOME/ios-sdk/*.sdk | head -1)
           echo "SDK=$SDK"
+          ls "$SDK" | head -10
           clang -target arm64-apple-ios16.5 \
                 -isysroot "$SDK" \
                 -mios-version-min=14.0 \
